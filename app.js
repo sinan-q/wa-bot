@@ -6,6 +6,8 @@ const qrcode = require("qrcode")
 const express = require("express")
 const DataStore = require('nedb-promises')
 const bcrypt = require("bcryptjs")
+const jwt = require('jsonwebtoken')
+const config = require('./config.js')
 const { Server } = require("socket.io")
 const { default: pino } = require("pino")
 const port = 3000
@@ -51,6 +53,30 @@ app.post("/api/auth/register", async (req, res) => {
     }
 })
     
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { phoneNumber, password} = req.body
+        if ( !phoneNumber || !password) return res.status(422).json({ message: "Please fill in all fields"})
+
+        const user = await users.findOne({ phoneNumber})
+        if (!user) return res.status(401).json({ message: 'Email or password is incorrect'})
+        console.log(password, user.password, user)
+        const passwordMatch = await bcrypt.compare(password, user.password)
+        if (!passwordMatch) return res.status(401).json({ message: 'Email or password is incorrect'})
+
+        const accessToken = jwt.sign({ userId: user._id , phoneNumber: user.phoneNumber}, config.accessTokenSecret, { subject:"accessApi", expiresIn:"1d"})
+
+        return res.status(200).json({
+            id: user._id,
+            name: user.name,
+            phoneNumber: user.phoneNumber,
+            accessToken
+        })
+    } catch(error) {
+        return res.status(500).json({ message: error.message})
+    }
+})
+
 app.get("/send", (req, res) => {
     if (sock != undefined) {
         sock.sendMessage("919539391118@s.whatsapp.net", { text: 'oh hello there' })
