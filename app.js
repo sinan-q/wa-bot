@@ -68,7 +68,6 @@ app.post('/api/auth/login', async (req, res) => {
 
         return res.status(200).json({
             id: user._id,
-            name: user.name,
             phoneNumber: user.phoneNumber,
             accessToken
         })
@@ -76,6 +75,37 @@ app.post('/api/auth/login', async (req, res) => {
         return res.status(500).json({ message: error.message})
     }
 })
+
+app.get('/api/user/me', authenticated, async (req, res) => {
+    try {
+        const user = await users.findOne({ _id: req.user.id})
+
+        return res.status(200).json({
+            id: user._id,
+            name: user.name,
+            phoneNumber: user.phoneNumber,
+
+
+        })
+    } catch (error) {
+        return res.status(500).json({ message: error.message})
+    }
+})
+
+async function authenticated(req, res, next) {
+    const accessToken = req.headers.authorization
+
+    if(!accessToken) return res.status(401).json({message: "Access token not found"})
+    try {
+        const decodedAccessToken = jwt.verify(accessToken, config.accessTokenSecret)
+        req.user = { id: decodedAccessToken.userId }
+        console.log(req.user)
+
+        next()
+    } catch (error) {
+        return res.status(401).json({ message: "Access Token is invalid"})
+    }
+}
 
 app.get("/send", (req, res) => {
     if (sock != undefined) {
