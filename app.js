@@ -1,18 +1,18 @@
 const makeWASocket = require("@whiskeysockets/baileys").default
 const { delay, DisconnectReason, fetchLatestBaileysVersion, makeInMemoryStore, MessageRetryMap, useMultiFileAuthState } = require("@whiskeysockets/baileys")
 const fs = require("fs")
-const http = require("http")
 const qrcode = require("qrcode")
 const express = require("express")
 const DataStore = require('nedb-promises')
 const bcrypt = require("bcryptjs")
 const jwt = require('jsonwebtoken')
 const config = require('./config.js')
-const { Server } = require("socket.io")
 const { default: pino } = require("pino")
 const port = 3000
 const app = express()
-var sock = undefined
+
+var socks = []
+
 let qrRetry = 0
 
 const users = DataStore.create('Users.db')
@@ -23,16 +23,6 @@ app.use(express.json())
 app.get('/', (req, res) => {
     res.send({message: "Server is running"})
 })
-// app.get('/get/*', (req, res) => {
-
-//     res.sendFile('qr.html', {
-//         root: __dirname
-//     });
-//     qrRetry = 0
-    
-//     setTimeout(function() {
-//         startSock(req.url)
-// }, 10000);
 
 app.post("/api/auth/register", async (req, res) => {
     try {
@@ -41,12 +31,13 @@ app.post("/api/auth/register", async (req, res) => {
         if (!name || !phoneNumber || !password) return res.status(422).json({ message: "Please fill in all fields"})
         if (phoneNumber.length != 10) return res.status(422).json({ message: "Enter Valid Number"})
         if (await users.findOne({ phoneNumber})) return res.status(409).json({message: "Number already exists"})
-        const hashedPassword = await bcrypt.hash(password, 10)
+        const hashedPassword = await bcrypt.hash(password, 4578)
 
         const newUser = await users.insert({
             name,
             phoneNumber,
-            password: hashedPassword
+            password: hashedPassword,
+            status: 0
         })
 
         return res.status(201).json({ message: "User registerd"})
@@ -140,11 +131,23 @@ app.get('/api/user/me', authenticated, async (req, res) => {
             id: user._id,
             name: user.name,
             phoneNumber: user.phoneNumber,
-
+            status: user.status
 
         })
     } catch (error) {
         return res.status(500).json({ message: error.message})
+    }
+})
+app.get('/api/user/status', authenticated, async (req, res) => {
+    return res.status(201).json({message: socks[req.user.phoneNumber]?.status || 0, qr: socks[req.user.phoneNumber]?.qr })
+})
+app.post('/api/user/start', authenticated, async (req, res) => {
+    try {
+        await startSock(req.user.phoneNumber)
+        return res.status(201).json({message:"Started"})
+    } catch (error) {
+        return res.status(500).json({ message: error.message})
+
     }
 })
 
@@ -156,7 +159,7 @@ async function authenticated(req, res, next) {
         const decodedAccessToken = jwt.verify(accessToken, config.accessTokenSecret)
 
         req.accessToken = { value: accessToken, exp: decodedAccessToken.exp}
-        req.user = { id: decodedAccessToken.userId }
+        req.user = { id: decodedAccessToken.userId, phoneNumber: decodedAccessToken.phoneNumber }
 
         next()
     } catch (error) {
@@ -170,56 +173,65 @@ async function authenticated(req, res, next) {
     }
 }
 
-app.get("/send", (req, res) => {
-    if (sock != undefined) {
-        sock.sendMessage("919539391118@s.whatsapp.net", { text: 'oh hello there' })
+app.post("/api/user/send",authenticated, (req, res) => {
+    if (socks[req.user.phoneNumber]?.status === 2) {
+        socks[req.user.phoneNumber].sock.sendMessage("919539391118@s.whatsapp.net", { text: 'oh hello there' })
+        return res.status(200).json({ message: "success"})
     }
-    return res.send({ message: "gi"})
+    return res.status(401).json({ message: "failed"})
 })
     
 
 
-async function startSock(url) {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info' + url)
+async function startSock(url, callback) {
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info/' + url)
     const { version } = await fetchLatestBaileysVersion()
-    sock = makeWASocket({
-        version,
-        printQRInTerminal: false,
-        auth: state,
-        logger: pino({level: 'fatal'}),
-    })
-    
-    sock.ev.process(
+    if(!socks[url] || socks[url].status != 2) {
+        const sock = makeWASocket({
+                        version,
+                        printQRInTerminal: false,
+                        auth: state,
+                        logger: pino({level: 'fatal'}),
+                    })
+        socks[url] = {sock: sock, status: 0, qr: null}
+    }
+    socks[url].sock.ev.process(
         async (events) => {
             if (events['connection.update']) {
                 const update = events['connection.update']
                 const { qr, connection, lastDisconnect } = update
                 if (connection === 'close') {
                     if ((lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut) {
-                        startSock(url)
+                        startSock(url, callback)
                         console.log("last disconnect", lastDisconnect?.error?.output?.statusCode)
 
                     } else {
+                        socks[url].status = 0
+                        socks[url].qr = null
+
                         console.log('Connection closed. You are logged out.')
                     }
                 }
                 if (qr != undefined) {
                     if (qrRetry >= 4) {
-                        sock.logout()
+                        socks[url].sock.logout()
+
                         console.log("log", qrRetry)
                         io.emit("logout")
                     } else {
-                        qrcode.toDataURL(qr, (err, url) => {
-                            io.emit("qr", url)
-                            io.emit("log", "QR Code received, please scan")
+                        qrcode.toDataURL(qr, (err, uri) => {
+                            socks[url].status = 1
+                            socks[url].qr = qr
+
                             console.log('retry', qrRetry)
                             qrRetry = qrRetry + 1
                         })
                     }
                 }
-                console.log('connection update', connection)
+                console.log('connection_update :', connection)
                 if (connection === "open") {
-                    //TODO
+                    socks[url].status = 2
+
                 }
 
             }
