@@ -47,7 +47,7 @@ const loginUser = async (req, res ) => {
             refreshToken,
             userId: user._id
         })
-        res.cookie('jwt',refreshToken, { httpOnly: true, maxAge: 24 * 60 *60 *1000})
+        res.cookie('jwt',refreshToken, { httpOnly: true, maxAge: 7 * 24 * 60 *60 *1000})
         return res.status(200).json({
             id: user._id,
             phoneNumber: user.phoneNumber,
