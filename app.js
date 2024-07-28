@@ -37,9 +37,8 @@ app.post("/api/auth/register", async (req, res) => {
         if (!name || !phoneNumber || !password) return res.status(422).json({ message: "Please fill in all fields"})
         if (phoneNumber.length != 10) return res.status(422).json({ message: "Enter Valid Number"})
         if (await users.findOne({ phoneNumber})) return res.status(409).json({message: "Number already exists"})
-        const hashedPassword = await bcrypt.hash(password, 4578)
-
-        const newUser = await users.insert({
+        const hashedPassword = await bcrypt.hash(password, 10)
+        await users.insert({
             name,
             phoneNumber,
             password: hashedPassword,
