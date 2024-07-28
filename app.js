@@ -7,6 +7,8 @@ const DataStore = require('nedb-promises')
 const bcrypt = require("bcryptjs")
 const jwt = require('jsonwebtoken')
 const config = require('./config.js')
+const cors = require('cors')
+const morganLogger = require('morgan')
 const { default: pino } = require("pino")
 const port = 3000
 const app = express()
@@ -18,7 +20,11 @@ let qrRetry = 0
 const users = DataStore.create('Users.db')
 const userRefreshTokens = DataStore.create('UserRefreshTokens')
 
+app.use(cors({ origin: true, credentials: true}))
 app.use(express.json())
+app.use(express.urlencoded({ extended: true}))
+app.use(morganLogger('dev'))
+
 
 app.get('/', (req, res) => {
     res.send({message: "Server is running"})
@@ -48,7 +54,7 @@ app.post("/api/auth/register", async (req, res) => {
     
 app.post('/api/auth/login', async (req, res) => {
     try {
-        const { phoneNumber, password} = req.body
+        const { phoneNumber, password } = req.body
         if ( !phoneNumber || !password) return res.status(422).json({ message: "Please fill in all fields"})
 
         const user = await users.findOne({ phoneNumber})
