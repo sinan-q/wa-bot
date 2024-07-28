@@ -10,6 +10,8 @@ const morganLogger = require('morgan')
 const { default: pino } = require("pino")
 const port = 3000
 const app = express()
+const authenticated = require('./middleware/authenticated');
+
 
 var socks = []
 
@@ -29,7 +31,10 @@ app.get('/', (req, res) => {
 })
 
 app.use("/auth", require('./routes/auth.js'))
-    
+
+app.use(authenticated)
+app.use('/user', require('./routes/user.js'))
+
 app.get("api/auth/logout", authenticated, async (req, res) => {
     try {
         await userRefreshTokens.removeMany({ userId: req.user.id})
@@ -77,21 +82,6 @@ app.post("/api/auth/refresh-token", async (req,res) => {
         res.status(500).json({message: error.message})
     }
 })
-app.get('/api/user/me', authenticated, async (req, res) => {
-    try {
-        const user = await users.findOne({ _id: req.user.id})
-
-        return res.status(200).json({
-            id: user._id,
-            name: user.name,
-            phoneNumber: user.phoneNumber,
-            status: user.status
-
-        })
-    } catch (error) {
-        return res.status(500).json({ message: error.message})
-    }
-})
 app.get('/api/user/status', authenticated, async (req, res) => {
     return res.status(201).json({message: socks[req.user.phoneNumber]?.status || 0, qr: socks[req.user.phoneNumber]?.qr })
 })
@@ -104,28 +94,6 @@ app.post('/api/user/start', authenticated, async (req, res) => {
 
     }
 })
-
-async function authenticated(req, res, next) {
-    const accessToken = req.headers.authorization
-
-    if(!accessToken) return res.status(401).json({message: "Access token not found"})
-    try {
-        const decodedAccessToken = jwt.verify(accessToken,  process.env.ACCESS_TOKEN_SECRET)
-
-        req.accessToken = { value: accessToken, exp: decodedAccessToken.exp}
-        req.user = { id: decodedAccessToken.userId, phoneNumber: decodedAccessToken.phoneNumber }
-
-        next()
-    } catch (error) {
-        if (error instanceof jwt.TokenExpiredError) {
-            return res.status(401).json({ message: "Access Token expired", code: "AccessTokenExpired"})
-        } else if (error instanceof jwt.JsonWebTokenError) {
-            return res.status(401).json({ message: "Access Token invalid", code: "AccessTokenInvalid"})
-        } else {
-            return res.status(500).json({ message: error.message})
-        }
-    }
-}
 
 app.post("/api/user/send",authenticated, (req, res) => {
     if (socks[req.user.phoneNumber]?.status === 2) {
