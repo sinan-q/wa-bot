@@ -4,7 +4,7 @@ const qrcode = require("qrcode")
 const express = require("express")
 const DataStore = require('nedb-promises')
 const jwt = require('jsonwebtoken')
-const config = require('./config.js')
+require('dotenv').config();
 const cors = require('cors')
 const morganLogger = require('morgan')
 const { default: pino } = require("pino")
@@ -50,7 +50,7 @@ app.post("/api/auth/refresh-token", async (req,res) => {
             return res.status(401).json({ message: "Refresh Token is not found"})
         }
 
-        const decodedRefreshToken = jwt.verify(refreshToken, config.refreshTokenSecret)
+        const decodedRefreshToken = jwt.verify(refreshToken,  process.env.REFRESH_TOKEN_SECRET)
 
         const userRefreshToken = await userRefreshTokens.findOne({ refreshToken, userId: decodedRefreshToken.userId})
         if(!userRefreshToken) return res.status(401).json({ message: 'Refresh Token invalid or expired'})
@@ -58,8 +58,8 @@ app.post("/api/auth/refresh-token", async (req,res) => {
         await userRefreshTokens.remove({ _id: userRefreshToken._id})
         await userRefreshTokens.compactDataFile()
 
-        const accessToken = jwt.sign({ userId:  decodedRefreshToken.userId , phoneNumber:  decodedRefreshToken.phoneNumber}, config.accessTokenSecret, { subject:"accessApi", expiresIn:"1d"})
-        const newRefreshToken = jwt.sign({ userId:  decodedRefreshToken.userId , phoneNumber:  decodedRefreshToken.phoneNumber}, config.refreshTokenSecret, { subject:"refreshToken", expiresIn:"1w"})
+        const accessToken = jwt.sign({ userId:  decodedRefreshToken.userId , phoneNumber:  decodedRefreshToken.phoneNumber},  process.env.ACCESS_TOKEN_SECRET, { subject:"accessApi", expiresIn:"1d"})
+        const newRefreshToken = jwt.sign({ userId:  decodedRefreshToken.userId , phoneNumber:  decodedRefreshToken.phoneNumber},  process.env.REFRESH_TOKEN_SECRET, { subject:"refreshToken", expiresIn:"1w"})
 
         await userRefreshTokens.insert({
             refreshToken: newRefreshToken,
@@ -110,7 +110,7 @@ async function authenticated(req, res, next) {
 
     if(!accessToken) return res.status(401).json({message: "Access token not found"})
     try {
-        const decodedAccessToken = jwt.verify(accessToken, config.accessTokenSecret)
+        const decodedAccessToken = jwt.verify(accessToken,  process.env.ACCESS_TOKEN_SECRET)
 
         req.accessToken = { value: accessToken, exp: decodedAccessToken.exp}
         req.user = { id: decodedAccessToken.userId, phoneNumber: decodedAccessToken.phoneNumber }

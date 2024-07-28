@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs")
 const users = DataStore.create('Users.db')
 const userRefreshTokens = DataStore.create('UserRefreshTokens')
 const jwt = require('jsonwebtoken')
-const config = require('../config.js')
+require('dotenv').config();
 
 
 
@@ -40,14 +40,14 @@ const loginUser = async (req, res ) => {
         const passwordMatch = await bcrypt.compare(password, user.password)
         if (!passwordMatch) return res.status(401).json({ message: 'Email or password is incorrect'})
 
-        const accessToken = jwt.sign({ userId: user._id , phoneNumber: user.phoneNumber}, config.accessTokenSecret, { subject:"accessApi", expiresIn:"1d"})
-        const refreshToken = jwt.sign({ userId: user._id , phoneNumber: user.phoneNumber}, config.refreshTokenSecret, { subject:"refreshToken", expiresIn:"1w"})
+        const accessToken = jwt.sign({ userId: user._id , phoneNumber: user.phoneNumber}, process.env.ACCESS_TOKEN_SECRET, { subject:"accessApi", expiresIn:"1d"})
+        const refreshToken = jwt.sign({ userId: user._id , phoneNumber: user.phoneNumber}, process.env.REFRESH_TOKEN_SECRET, { subject:"refreshToken", expiresIn:"1w"})
 
         await userRefreshTokens.insert({
             refreshToken,
             userId: user._id
         })
-        res.cookie('jwt',refreshToken, { httpOnly: true})
+        res.cookie('jwt',refreshToken, { httpOnly: true, maxAge: 24 * 60 *60 *1000})
         return res.status(200).json({
             id: user._id,
             phoneNumber: user.phoneNumber,
