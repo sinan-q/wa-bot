@@ -51,12 +51,46 @@ const loginUser = async (req, res ) => {
         return res.status(200).json({
             id: user._id,
             phoneNumber: user.phoneNumber,
-            accessToken,
-            refreshToken
+            accessToken
         })
     } catch(error) {
         return res.status(500).json({ message: error.message})
     }
 }
 
-module.exports = { registerUser , loginUser }
+const refreshToken = async (req, res) => {
+    const cookies = req.cookies 
+    if (!cookies?.jwt) return res.status(401).json({ message: "Refresh Token is not found"})
+    const refreshToken = cookies.jwt
+
+    try {
+
+        const decodedRefreshToken = jwt.verify(refreshToken,  process.env.REFRESH_TOKEN_SECRET)
+
+        const userRefreshToken = await userRefreshTokens.findOne({ refreshToken, userId: decodedRefreshToken.userId})
+        if(!userRefreshToken) return res.status(401).json({ message: 'Refresh Token invalid or expired'})
+
+        await userRefreshTokens.remove({ _id: userRefreshToken._id})
+        await userRefreshTokens.compactDatafile()
+
+        const accessToken = jwt.sign({ userId:  decodedRefreshToken.userId , phoneNumber:  decodedRefreshToken.phoneNumber},  process.env.ACCESS_TOKEN_SECRET, { subject:"accessApi", expiresIn:"1d"})
+        const newRefreshToken = jwt.sign({ userId:  decodedRefreshToken.userId , phoneNumber:  decodedRefreshToken.phoneNumber},  process.env.REFRESH_TOKEN_SECRET, { subject:"refreshToken", expiresIn:"1w"})
+
+        await userRefreshTokens.insert({
+            refreshToken: newRefreshToken,
+            userId: decodedRefreshToken.userId
+        })
+        res.cookie('jwt',newRefreshToken, { httpOnly: true, maxAge: 24 * 60 *60 *1000})
+
+        return res.status(200).json({
+            accessToken
+        })
+
+    } catch (error) {
+        if (error instanceof jwt.TokenExpiredError || error instanceof jwt.JsonWebTokenError) return res.status(401).json({message: "Refresh Token invalid or expired"})
+
+        res.status(500).json({message: error.message})
+    }
+}
+
+module.exports = { registerUser , loginUser ,refreshToken }
