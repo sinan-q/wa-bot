@@ -36,18 +36,6 @@ app.use("/auth", require('./routes/auth.js'))
 app.use(authenticated)
 app.use('/user', require('./routes/user.js'))
 
-app.get("api/auth/logout", authenticated, async (req, res) => {
-    try {
-        await userRefreshTokens.removeMany({ userId: req.user.id})
-        await userRefreshTokens.compactDataFile()
-
-        return res.status(204).send({ message: "Logged Out"})
-
-    } catch (error) {
-        return res.status(500).json({message: error.message})
-    }
-})
-
 app.get('/api/user/status', authenticated, async (req, res) => {
     return res.status(201).json({message: socks[req.user.phoneNumber]?.status || 0, qr: socks[req.user.phoneNumber]?.qr })
 })

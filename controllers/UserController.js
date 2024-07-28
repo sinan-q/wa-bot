@@ -1,5 +1,6 @@
 const DataStore = require('nedb-promises')
 const users = DataStore.create('Users.db')
+const userRefreshTokens = DataStore.create('UserRefreshTokens')
 
 
 
@@ -20,4 +21,19 @@ const me = async ( req, res) => {
     }
 }
 
-module.exports = { me }
+const logout = async (req, res) => {
+    const cookies = req.cookies 
+
+    try {
+        if (!cookies?.jwt) await userRefreshTokens.removeMany({ userId: req.user.id})
+        else await userRefreshTokens.removeMany({ refreshToken:  cookies.jwt})
+        await userRefreshTokens.compactDatafile()
+        res.clearCookie('jwt', { httpOnly: true } )
+        return res.status(204).json({ message: "Logged Out"})
+
+    } catch (error) {
+        return res.status(500).json({message: error.message})
+    }
+}
+
+module.exports = { me, logout }
