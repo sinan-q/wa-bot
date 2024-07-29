@@ -2,6 +2,7 @@ const makeWASocket = require("@whiskeysockets/baileys").default
 const { DisconnectReason, fetchLatestBaileysVersion, useMultiFileAuthState } = require("@whiskeysockets/baileys")
 const qrcode = require("qrcode")
 const { default: pino } = require("pino")
+const fs = require("fs");
 
 let qrRetry = 0
 var socks = []
@@ -41,6 +42,7 @@ const logout = async (req, res) => {
         await socks[req.user.phoneNumber].sock.logout()
         return res.status(200).json({ message: "success"})
     } catch (error) {
+        console.log(JSON.stringify(error))
         return res.status(500).json({ message: error.message})
     }
         
@@ -65,12 +67,15 @@ async function startSock(url) {
                 const update = events['connection.update']
                 const { qr, connection, lastDisconnect } = update
                 if (connection === 'close') {
-                    if ((lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut) {
+                    let lastDisconnectReason = (lastDisconnect?.error)?.output?.statusCode
+                    if ( lastDisconnectReason !== DisconnectReason.loggedOut) {
                         startSock(url)
                     } else {
+                        fs.rmSync("./auth_info/" + url, { recursive: true, force: true });
+                        socks[url].sock = null
                         socks[url].status = 0
                         socks[url].qr = null
-                        console.log('Connection closed. You are logged out.')
+                        console.log('Connection closed. You are logged out.', (lastDisconnect?.error)?.output?.statusCode)
                     }
                 }
                 if (qr != undefined) {
