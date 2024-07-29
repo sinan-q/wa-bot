@@ -26,11 +26,11 @@ const start = async ( req, res) =>  {
 }
 
 const send = async (req, res) => {
-    const { message } = req.body
+    const { message, phoneNumber } = req.body
     if ( !message ) return res.status(422).json({ message: "Please fill in all fields"})
 
     if (socks[req.user.phoneNumber]?.status === 2) {
-        socks[req.user.phoneNumber].sock.sendMessage("919539391118@s.whatsapp.net", { text: message })
+        socks[req.user.phoneNumber].sock.sendMessage(phoneNumber+"@s.whatsapp.net", { text: message })
         return res.status(200).json({ message: "success"})
     }
     return res.status(401).json({ message: "failed"})
