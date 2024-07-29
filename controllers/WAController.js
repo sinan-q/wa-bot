@@ -26,12 +26,16 @@ const start = async ( req, res) =>  {
 }
 
 const send = async (req, res) => {
+    const { message } = req.body
+    if ( !message ) return res.status(422).json({ message: "Please fill in all fields"})
+
     if (socks[req.user.phoneNumber]?.status === 2) {
-        socks[req.user.phoneNumber].sock.sendMessage("919539391118@s.whatsapp.net", { text: 'oh hello there' })
+        socks[req.user.phoneNumber].sock.sendMessage("919539391118@s.whatsapp.net", { text: message })
         return res.status(200).json({ message: "success"})
     }
     return res.status(401).json({ message: "failed"})
 }
+
 const logout = async (req, res) => {
     try {
         await socks[req.user.phoneNumber].sock.logout()
@@ -43,7 +47,7 @@ const logout = async (req, res) => {
 }
 module.exports = { status, start, send, logout }
 
-async function startSock(url, callback) {
+async function startSock(url) {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info/' + url)
     const { version } = await fetchLatestBaileysVersion()
     if(!socks[url] || socks[url].status != 2) {
@@ -62,22 +66,17 @@ async function startSock(url, callback) {
                 const { qr, connection, lastDisconnect } = update
                 if (connection === 'close') {
                     if ((lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut) {
-                        startSock(url, callback)
-                        console.log("last disconnect", lastDisconnect?.error?.output?.statusCode)
-
+                        startSock(url)
                     } else {
                         socks[url].status = 0
                         socks[url].qr = null
-
                         console.log('Connection closed. You are logged out.')
                     }
                 }
                 if (qr != undefined) {
                     if (qrRetry >= 4) {
                         socks[url].sock.logout()
-
                         console.log("log", qrRetry)
-                        io.emit("logout")
                     } else {
                         qrcode.toDataURL(qr, (err, uri) => {
                             socks[url].status = 1
