@@ -9,8 +9,20 @@ var socks = []
 
 
 const status = async ( req, res) => {
+    
     try {
-        return res.status(201).json({message: socks[req.user.phoneNumber]?.status || 0, qr: socks[req.user.phoneNumber]?.qr })
+        const sock = socks[req.user.phoneNumber]
+        let preStatus = -1
+        res.setHeader("Content-Type", "text/event-stream")
+
+        intervalId = setInterval(() => {
+            if (preStatus !== sock?.status) {
+                res.write(`{ "data":${sock?.status || 0}, "qr":${sock?.qr || "null"} }`) //({message: , qr: socks[req.user.phoneNumber]?.qr })
+                preStatus = sock?.status
+            }
+        }, 2000)
+
+        req.on('close' , ()=> clearInterval(intervalId))
     } catch (error) {
         return res.status(500).json({ message: error.message})
     }
