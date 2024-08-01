@@ -47,7 +47,20 @@ const logout = async (req, res) => {
     }
         
 }
-module.exports = { status, start, send, logout }
+
+const stop = async (req, res) => {
+    try {
+        socks[req.user.phoneNumber].sock = null
+        socks[req.user.phoneNumber].status = 0
+        socks[req.user.phoneNumberz].qr = null
+        return res.status(200).json({ message: "success"})
+    } catch (error) {
+        console.log(JSON.stringify(error))
+        return res.status(500).json({ message: error.message})
+    }
+        
+}
+module.exports = { status, start, send, stop, logout }
 
 async function startSock(url) {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info/' + url)
@@ -67,15 +80,21 @@ async function startSock(url) {
                 const update = events['connection.update']
                 const { qr, connection, lastDisconnect } = update
                 if (connection === 'close') {
+                    socks[url].sock = null
+                    socks[url].status = 0
+                    socks[url].qr = null
                     let lastDisconnectReason = (lastDisconnect?.error)?.output?.statusCode
                     if ( lastDisconnectReason !== DisconnectReason.loggedOut) {
-                        startSock(url)
-                    } else {
+                        console.log('Connection closed', JSON.stringify(lastDisconnect))
+                        if ( lastDisconnectReason === DisconnectReason.timedOut) {
+                            socks[url].status = 408
+                        } else if (lastDisconnectReason) {
+                            startSock(url)
+                        }
+                    } else  {
                         fs.rmSync("./auth_info/" + url, { recursive: true, force: true });
-                        socks[url].sock = null
-                        socks[url].status = 0
-                        socks[url].qr = null
-                        console.log('Connection closed. You are logged out.', (lastDisconnect?.error)?.output?.statusCode)
+                        
+                        console.log('Connection closed. You are logged out.', lastDisconnectReason)
                     }
                 }
                 if (qr != undefined) {
@@ -92,7 +111,7 @@ async function startSock(url) {
                         })
                     }
                 }
-                console.log('connection_update :', connection)
+                console.log('connection_update :', connection || update)
                 if (connection === "open") {
                     socks[url].status = 2
 

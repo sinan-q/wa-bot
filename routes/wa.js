@@ -6,6 +6,7 @@ router.get('/status',  waController.status);
 router.post('/start',  waController.start);
 router.post('/send',  waController.send);
 router.post('/logout',  waController.logout);
+router.post('/stop', waController.stop);
 
 
 
