@@ -5,8 +5,6 @@ const authenticated = (req, res, next) => {
     const auth = req.headers['authorization']
 
     if(!auth) return res.status(401).json({message: "Access token not found"})
-    
-    console.log(auth);
     try {
         const decodedAccessToken = jwt.verify(auth.split(' ')[1],  process.env.ACCESS_TOKEN_SECRET)
         req.user = { id: decodedAccessToken.userId, phoneNumber: decodedAccessToken.phoneNumber }
